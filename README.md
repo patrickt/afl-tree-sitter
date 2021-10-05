@@ -5,6 +5,8 @@ Experimental harness hooking up [`afl-fuzz`](https://lcamtuf.coredump.cx/afl/) t
 ## Running
 
 1. install `stack`
-2. `stack install shake`
-3. `stack exec -- shake`
-4. `_build/run`
+2. make sure `../tree-sitter/libtree-sitter.a` is present
+3. `stack install shake`
+4. `stack exec -- shake`
+5. `mkdir findings`
+6. `afl-fuzz -i tests -o findings _build/run @@`
