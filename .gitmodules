@@ -1,0 +1,3 @@
+[submodule "vendor/tree-sitter-json"]
+	path = vendor/tree-sitter-json
+	url = git@github.com:tree-sitter/tree-sitter-json.git
