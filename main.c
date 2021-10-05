@@ -1,45 +1,62 @@
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
+#include <fcntl.h>
 #include <tree_sitter/api.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
 
 // Declare the `tree_sitter_json` function, which is
 // implemented by the `tree-sitter-json` library.
 TSLanguage *tree_sitter_json();
 
-int main() {
+int main(int argc, char **argv) {
+  if (argc != 2) {
+    fprintf(stderr, "Too few arguments: %d\n", argc - 1);
+    return 1;
+  }
+
   // Create a parser.
   TSParser *parser = ts_parser_new();
 
   // Set the parser's language (JSON in this case).
   ts_parser_set_language(parser, tree_sitter_json());
 
-  // Build a syntax tree based on source code stored in a string.
-  const char *source_code = "[1, null]";
+  // Build a syntax tree based on source code stored in the provided file.
+  int fd = open(argv[1], O_RDONLY);
+  char *msg = NULL;
+
+  if (fd < 0) {
+    asprintf(&msg, "Couldn't open file %s", argv[1]);
+    goto die;
+  }
+
+  struct stat filestats;
+  int status = fstat(fd, &filestats);
+  if (status < 0) {
+    asprintf(&msg, "Couldn't stat file %s", argv[1]);
+    goto die;
+  }
+
+  const char *source_code = mmap(0, filestats.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+  if (source_code == MAP_FAILED) {
+    asprintf(&msg, "Couldn't mmap file %s", argv[1]);
+    goto die;
+  }
+
   TSTree *tree = ts_parser_parse_string(
     parser,
     NULL,
     source_code,
     strlen(source_code)
   );
+  if (tree == NULL) {
+    asprintf(&msg, "Couldn't parse file for unknown reasons.");
+    goto die;
+  }
 
   // Get the root node of the syntax tree.
   TSNode root_node = ts_tree_root_node(tree);
-
-  // Get some child nodes.
-  TSNode array_node = ts_node_named_child(root_node, 0);
-  TSNode number_node = ts_node_named_child(array_node, 0);
-
-  // Check that the nodes have the expected types.
-  assert(strcmp(ts_node_type(root_node), "document") == 0);
-  assert(strcmp(ts_node_type(array_node), "array") == 0);
-  assert(strcmp(ts_node_type(number_node), "number") == 0);
-
-  // Check that the nodes have the expected child counts.
-  assert(ts_node_child_count(root_node) == 1);
-  assert(ts_node_child_count(array_node) == 5);
-  assert(ts_node_named_child_count(array_node) == 2);
-  assert(ts_node_child_count(number_node) == 0);
 
   // Print the syntax tree as an S-expression.
   char *string = ts_node_string(root_node);
@@ -50,4 +67,9 @@ int main() {
   ts_tree_delete(tree);
   ts_parser_delete(parser);
   return 0;
+
+ die:
+  perror(msg);
+  free(msg);
+  return 1;
 }
